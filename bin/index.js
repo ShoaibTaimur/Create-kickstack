@@ -6,12 +6,14 @@ import { execa } from "execa";
 import inquirer from "inquirer";
 
 /* ---------- helpers ---------- */
-const toPkgName = (n) => n.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+const toPkgName = (name) =>
+  name.toLowerCase().replace(/[^a-z0-9-]/g, "-");
 
 /* ---------- project name ---------- */
 const rawName = process.argv[2];
+
 if (!rawName) {
-  console.log("❌ Please provide a project name");
+  console.error("❌ Please provide a project name");
   process.exit(1);
 }
 
@@ -19,11 +21,11 @@ const projectName = rawName;
 const projectDir = path.resolve(process.cwd(), projectName);
 
 if (fs.existsSync(projectDir)) {
-  console.log("❌ Folder already exists");
+  console.error("❌ Folder already exists");
   process.exit(1);
 }
 
-/* ---------- variant ---------- */
+/* ---------- select variant ---------- */
 const { variant } = await inquirer.prompt([
   {
     type: "list",
@@ -33,16 +35,16 @@ const { variant } = await inquirer.prompt([
       "React (JavaScript)",
       "React + Tailwind (JavaScript)",
       "React + TypeScript",
-      "React + TypeScript + Tailwind"
-    ]
-  }
+      "React + TypeScript + Tailwind",
+    ],
+  },
 ]);
 
 const isTS = variant.includes("TypeScript");
 const isTW = variant.includes("Tailwind");
 const ext = isTS ? "tsx" : "jsx";
 
-/* ---------- folders ---------- */
+/* ---------- create folders ---------- */
 await fs.ensureDir(path.join(projectDir, "src"));
 await fs.ensureDir(path.join(projectDir, "public"));
 await fs.ensureDir(path.join(projectDir, ".vscode"));
@@ -54,12 +56,13 @@ await fs.writeJson(
     name: toPkgName(projectName),
     private: true,
     type: "module",
+    eslintConfig: { root: true },
     scripts: {
       dev: "vite",
       build: "vite build",
       preview: "vite preview",
-      lint: "eslint ."
-    }
+      lint: "eslint .",
+    },
   },
   { spaces: 2 }
 );
@@ -82,35 +85,32 @@ await fs.writeFile(
 );
 
 /* ---------- main ---------- */
-const mainFile = isTS
-  ? `import { StrictMode } from 'react'
+await fs.writeFile(
+  path.join(projectDir, `src/main.${ext}`),
+  isTS
+    ? `import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
 
-const root = document.getElementById('root')!
-
-createRoot(root).render(
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>
 )
 `
-  : `import { StrictMode } from 'react'
+    : `import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
-const root = document.getElementById('root')
-
-createRoot(root).render(
+createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
   </StrictMode>
 )
-`;
-
-await fs.writeFile(path.join(projectDir, `src/main.${ext}`), mainFile);
+`
+);
 
 /* ---------- App ---------- */
 await fs.writeFile(
@@ -118,7 +118,6 @@ await fs.writeFile(
   `import './App.css'
 
 function App() {
-
   return (
     <>
       <h1>Welcome to my project</h1>
@@ -129,8 +128,6 @@ function App() {
 export default App
 `
 );
-
-
 
 /* ---------- styles ---------- */
 await fs.writeFile(path.join(projectDir, "src/App.css"), "");
@@ -160,6 +157,51 @@ export default defineConfig({
 `
 );
 
+/* ---------- ESLint (FINAL, FORCE OVERWRITE) ---------- */
+const eslintPath = path.join(projectDir, "eslint.config.js");
+await fs.remove(eslintPath);
+
+await fs.writeFile(
+  eslintPath,
+  `import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import { defineConfig, globalIgnores } from 'eslint/config'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{js,jsx,ts,tsx}'],
+    extends: [
+      js.configs.recommended,
+      reactHooks.configs.flat.recommended,
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      globals: globals.browser,
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+        sourceType: 'module',
+      },
+    },
+    rules: {
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z]' }],
+    },
+  },
+])
+`
+);
+
+/* ---------- VS Code settings ---------- */
+await fs.writeFile(
+  path.join(projectDir, ".vscode/settings.json"),
+  `{
+  "eslint.experimental.useFlatConfig": true
+}`
+);
+
 /* ---------- gitignore ---------- */
 await fs.writeFile(
   path.join(projectDir, ".gitignore"),
@@ -173,91 +215,27 @@ dist-ssr
 `
 );
 
-/* ---------- ESLint (FINAL FIX) ---------- */
-await fs.writeFile(
-  path.join(projectDir, "eslint.config.js"),
-  `import js from "@eslint/js";
-import react from "eslint-plugin-react";
-import reactHooks from "eslint-plugin-react-hooks";
-import babelParser from "@babel/eslint-parser";
-
-export default [
-  js.configs.recommended,
-  {
-    files: ["**/*.{js,jsx,ts,tsx}"],
-    languageOptions: {
-      parser: babelParser,
-      parserOptions: {
-        ecmaVersion: "latest",
-        sourceType: "module",
-        ecmaFeatures: { jsx: true },
-        requireConfigFile: false,
-        babelOptions: {
-          presets: ["@babel/preset-react"]
-        }
-      },
-      globals: {
-        window: "readonly",
-        document: "readonly"
-      }
-    },
-    plugins: {
-      react,
-      "react-hooks": reactHooks
-    },
-    rules: {
-      "react/jsx-uses-vars": "error",
-      "react/react-in-jsx-scope": "off",
-      "react-hooks/rules-of-hooks": "error"
-    },
-    settings: {
-      react: { version: "detect" }
-    }
-  }
-];
-`
-);
-
-/* ---------- VS Code ---------- */
-await fs.writeFile(
-  path.join(projectDir, ".vscode/extensions.json"),
-  `{
-  "recommendations": ["dbaeumer.vscode-eslint"]
-}`
-);
-
-/* ---------- README ---------- */
-await fs.writeFile(
-  path.join(projectDir, "README.md"),
-  `# ${projectName}
-
-Created with **create-kickstack**.
-
-\`\`\`bash
-npm install
-npm run dev
-\`\`\`
-`
-);
-
-/* ---------- install deps ---------- */
+/* ---------- install dependencies ---------- */
 console.log("📦 Installing dependencies...");
 
-const deps = ["react", "react-dom", "vite", "@vitejs/plugin-react"];
-const devDeps = [
-  "eslint",
-  "eslint-plugin-react",
-  "eslint-plugin-react-hooks",
-  "@babel/eslint-parser",
-  "@babel/preset-react",
-  ...(isTS ? ["typescript"] : []),
-  ...(isTW ? ["tailwindcss", "@tailwindcss/vite"] : [])
-];
-
-await execa("npm", ["install", ...deps, "-D", ...devDeps], {
-  cwd: projectDir,
-  stdio: "inherit"
-});
+await execa(
+  "npm",
+  [
+    "install",
+    "react",
+    "react-dom",
+    "vite",
+    "@vitejs/plugin-react",
+    "eslint",
+    "@eslint/js",
+    "globals",
+    "eslint-plugin-react-hooks",
+    "eslint-plugin-react-refresh",
+    ...(isTS ? ["typescript"] : []),
+    ...(isTW ? ["tailwindcss", "@tailwindcss/vite"] : []),
+  ],
+  { cwd: projectDir, stdio: "inherit" }
+);
 
 console.log("✅ Project ready!");
 console.log(`👉 cd ${projectName}`);
