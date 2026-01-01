@@ -1,6 +1,6 @@
 {
   "name": "create-kickstack",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "Clean React + Vite project scaffolder",
   "author": "Shoaib Taimur",
   "license": "MIT",
