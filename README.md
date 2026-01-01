@@ -12,7 +12,7 @@ It helps you start coding **immediately**, instead of deleting files first.
 
 ## ✨ What is create-kickstack?
 
-create-kickstack is an npm-based command-line tool that creates a fresh React project using Vite, while removing all default demo code and test styles.
+create-kickstack is an npm-based command-line tool that creates a fresh React project using the **latest Vite template**, while removing all default demo code and test styles.
 
 Instead of logos, counters, and animations, you get a **blank, ready-to-build foundation**.
 
@@ -26,10 +26,10 @@ When you run create-kickstack, it automatically:
 
 * Creates a React project powered by Vite
 * Removes all demo and testing content
-* Sets up a minimal file structure
 * Gives you a clean `App` component
 * Optionally configures Tailwind CSS
-* Configures ESLint correctly (JSX + browser-safe)
+* Optionally adds React Router (data router)
+* Prompts to start the dev server after setup
 * Produces a project that runs instantly
 
 ---
@@ -44,7 +44,6 @@ Every project created with create-kickstack includes:
 * Minimal `App.jsx` / `App.tsx`
 * Empty `App.css`
 * Optional Tailwind CSS (v4)
-* ESLint preconfigured (no common errors)
 * `.gitignore` and `README.md`
 * Ready-to-run development server
 
@@ -68,6 +67,8 @@ When running the CLI, you’ll be prompted to select one of the following:
 4. **React + TypeScript + Tailwind**
 
 Each option generates the correct files, dependencies, and configuration automatically.
+
+You can also choose to include **React Router (data router)** during setup.
 
 ---
 
@@ -137,15 +138,9 @@ No manual setup required.
 
 ---
 
-### 🧠 ESLint configured correctly
+### 🧭 React Router ready (optional)
 
-Common issues like:
-
-* JSX parsing errors
-* `document is not defined`
-* unused component warnings
-
-are already fixed.
+Choose to include React Router (data router) and start with a clean router setup out of the box.
 
 ---
 
@@ -157,6 +152,7 @@ create-kickstack does **one thing well**:
 
 No heavy frameworks.
 No opinions forced on you.
+Uses the latest Vite template instead of hard-coding files.
 
 ---
 
@@ -168,7 +164,7 @@ No opinions forced on you.
 | Requires cleanup      | Ready immediately      |
 | Extra styles          | Clean styles           |
 | Manual Tailwind setup | Tailwind preconfigured |
-| ESLint issues common  | ESLint fixed           |
+| Manual Router setup   | Router optional        |
 
 ---
 
@@ -233,7 +229,6 @@ my-app/
 ├─ public/
 ├─ index.html
 ├─ vite.config.js
-├─ eslint.config.js
 ├─ .gitignore
 └─ package.json
 ```
