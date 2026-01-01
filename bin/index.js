@@ -175,7 +175,7 @@ const ext = isTS ? "tsx" : "jsx";
 const template = isTS ? "react-ts" : "react";
 
 /* ---------- scaffold via Vite ---------- */
-log(`📍 Using local create-kickstack from ${path.resolve(process.cwd())}`);
+log(`📍 Using local kickstack from ${path.resolve(process.cwd())}`);
 log(`🧩 Variant: ${variant}`);
 log("🚀 Scaffolding with Vite...");
 await run(

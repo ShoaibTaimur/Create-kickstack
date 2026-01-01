@@ -1,6 +1,6 @@
-# 🚀 create-kickstack
+# 🚀 kickstack
 
-**create-kickstack** is a lightweight CLI tool that scaffolds a **clean, minimal React + Vite project** — without demo clutter, boilerplate noise, or unnecessary setup.
+**kickstack** is a lightweight CLI tool that scaffolds a **clean, minimal React + Vite project** — without demo clutter, boilerplate noise, or unnecessary setup.
 
 It helps you start coding **immediately**, instead of deleting files first.
 
@@ -10,9 +10,9 @@ It helps you start coding **immediately**, instead of deleting files first.
 
 ---
 
-## ✨ What is create-kickstack?
+## ✨ What is kickstack?
 
-create-kickstack is an npm-based command-line tool that creates a fresh React project using the **latest Vite template**, while removing all default demo code and test styles.
+kickstack is an npm-based command-line tool that creates a fresh React project using the **latest Vite template**, while removing all default demo code and test styles.
 
 Instead of logos, counters, and animations, you get a **blank, ready-to-build foundation**.
 
@@ -22,7 +22,7 @@ Instead of logos, counters, and animations, you get a **blank, ready-to-build fo
 
 ## 🧠 What does it do?
 
-When you run create-kickstack, it automatically:
+When you run kickstack, it automatically:
 
 * Creates a React project powered by Vite
 * Removes all demo and testing content
@@ -36,7 +36,7 @@ When you run create-kickstack, it automatically:
 
 ## 📦 What you get by default
 
-Every project created with create-kickstack includes:
+Every project created with kickstack includes:
 
 * React + Vite
 * Clean `index.html`
@@ -72,11 +72,11 @@ You can also choose to include **React Router (data router)** during setup.
 
 ---
 
-## 🔥 Why create-kickstack instead of default Vite?
+## 🔥 Why kickstack instead of default Vite?
 
 Vite’s default React template is designed to **demonstrate features**, not to start real projects.
 
-create-kickstack is designed for **actual development**.
+kickstack is designed for **actual development**.
 
 ### 🧹 No demo clutter
 
@@ -88,7 +88,7 @@ Vite includes:
 * animations
 * sample styles
 
-create-kickstack removes all of that.
+kickstack removes all of that.
 
 You don’t delete code — you start writing code.
 
@@ -103,7 +103,7 @@ With default Vite:
 3. Clean CSS
 4. Fix ESLint warnings
 
-With create-kickstack:
+With kickstack:
 
 * Your first line of code is already yours.
 
@@ -146,7 +146,7 @@ Choose to include React Router (data router) and start with a clean router setup
 
 ### 🪶 Lightweight and focused
 
-create-kickstack does **one thing well**:
+kickstack does **one thing well**:
 
 > Create a clean React starting point.
 
@@ -158,7 +158,7 @@ Uses the latest Vite template instead of hard-coding files.
 
 ## 📊 Comparison
 
-| Default Vite          | create-kickstack       |
+| Default Vite          | kickstack              |
 | --------------------- | ---------------------- |
 | Demo-focused          | Project-focused        |
 | Requires cleanup      | Ready immediately      |
@@ -184,18 +184,18 @@ npm -v
 
 ---
 
-## ▶️ How to use create-kickstack
+## ▶️ How to use kickstack
 
 ### Create a new project
 
 ```bash
-npm create kickstack my-app
+npm kickstack my-app
 ```
 
 or
 
 ```bash
-npx create-kickstack my-app
+npx kickstack@latest my-app
 ```
 
 Follow the prompts to choose your preferred setup.
@@ -244,7 +244,7 @@ Created and maintained by **Shoaib Taimur**.
 ## 🏁 Final note
 
 If Vite gives you a **demo app**,
-**create-kickstack gives you a starting point.**
+**kickstack gives you a starting point.**
 
 No cleanup.
 No confusion.
