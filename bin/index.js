@@ -9,6 +9,16 @@ import inquirer from "inquirer";
 const run = (command, args, options = {}) =>
   execa(command, args, { stdio: "inherit", ...options });
 
+const runQuiet = async (command, args, options = {}) => {
+  try {
+    return await execa(command, args, { stdio: "pipe", ...options });
+  } catch (err) {
+    if (err.stdout) process.stdout.write(err.stdout);
+    if (err.stderr) process.stderr.write(err.stderr);
+    throw err;
+  }
+};
+
 const log = (message) => console.log(message);
 
 const startSpinner = (text) => {
@@ -122,6 +132,17 @@ const addTailwindToViteConfig = async (filePath, projectDir) => {
   await fs.writeFile(filePath, withPlugin);
 };
 
+const writeDaisyConfig = async (projectDir) => {
+  const configPath = path.join(projectDir, "tailwind.config.cjs");
+  const contents = `/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  plugins: [require("daisyui")],
+}
+`;
+  await fs.writeFile(configPath, contents);
+};
+
 /* ---------- project name ---------- */
 const rawName = process.argv[2];
 
@@ -168,32 +189,47 @@ const { useRouter } = await inquirer.prompt([
   },
 ]);
 
+const { uiLibrary } = await inquirer.prompt([
+  {
+    type: "list",
+    name: "uiLibrary",
+    message: "Include a UI library?",
+    choices: [
+      { name: "None", value: "none" },
+      { name: "DaisyUI", value: "daisyui" },
+    ],
+    default: "none",
+  },
+]);
+
 const isTS = variant.includes("TypeScript");
 const isTW = variant.includes("Tailwind");
 const isRR = useRouter === true;
+const isDaisy = uiLibrary === "daisyui";
 const ext = isTS ? "tsx" : "jsx";
 const template = isTS ? "react-ts" : "react";
 
 /* ---------- scaffold via Vite ---------- */
 log(`📍 Using local kickstack from ${path.resolve(process.cwd())}`);
 log(`🧩 Variant: ${variant}`);
-log("🚀 Scaffolding with Vite...");
-await run(
-  "npm",
-  [
-    "create",
-    "vite@latest",
-    projectName,
-    "--",
-    "--template",
-    template,
-    "--no-interactive",
-    "--no-rolldown",
-  ],
-  {
-    env: { ...process.env, CI: "1" },
-  }
-);
+await withSpinner("Scaffolding with Vite", async () => {
+  await runQuiet(
+    "npm",
+    [
+      "create",
+      "vite@latest",
+      projectName,
+      "--",
+      "--template",
+      template,
+      "--no-interactive",
+      "--no-rolldown",
+    ],
+    {
+      env: { ...process.env, CI: "1" },
+    }
+  );
+});
 
 /* ---------- clean up demo content ---------- */
 await withSpinner("Cleaning Vite demo files", async () => {
@@ -259,7 +295,13 @@ export default App
   await overwriteIfExists(path.join(projectDir, "src/App.css"), "", projectDir);
   await overwriteIfExists(
     path.join(projectDir, "src/index.css"),
-    isTW ? `@import "tailwindcss";` : "",
+    isDaisy
+      ? `@import "tailwindcss";
+@plugin "daisyui";
+`
+      : isTW
+        ? `@import "tailwindcss";`
+        : "",
     projectDir
   );
 
@@ -274,8 +316,12 @@ export default App
     );
   }
 
-  if (isTW && !cssContents.includes("@import \"tailwindcss\"")) {
+  if ((isTW || isDaisy) && !cssContents.includes("@import \"tailwindcss\"")) {
     throw new Error("Tailwind setup failed: index.css was not updated.");
+  }
+
+  if (isDaisy && !cssContents.includes("@plugin \"daisyui\"")) {
+    throw new Error("DaisyUI setup failed: index.css was not updated.");
   }
 });
 
@@ -285,27 +331,37 @@ const viteConfigPath = path.join(
   `vite.config.${isTS ? "ts" : "js"}`
 );
 
-if (isTW) {
+if (isTW || isDaisy) {
   await addTailwindToViteConfig(viteConfigPath, projectDir);
 }
 
 /* ---------- install dependencies ---------- */
-console.log("📦 Installing dependencies...");
-await run("npm", ["install"], { cwd: projectDir });
+await withSpinner("Installing dependencies", async () => {
+  await runQuiet("npm", ["install"], { cwd: projectDir });
+});
 
 if (isRR) {
-  await run("npm", ["install", "react-router"], { cwd: projectDir });
+  await withSpinner("Setting up React Router", async () => {
+    await runQuiet("npm", ["install", "react-router"], { cwd: projectDir });
+  });
 }
 
-await run(
-  "npm",
-  [
-    "install",
-    "-D",
-    ...(isTW ? ["tailwindcss", "@tailwindcss/vite"] : []),
-  ],
-  { cwd: projectDir }
-);
+if (isTW || isDaisy) {
+  await withSpinner("Setting up Tailwind CSS", async () => {
+    await runQuiet(
+      "npm",
+      ["install", "-D", "tailwindcss", "@tailwindcss/vite"],
+      { cwd: projectDir }
+    );
+  });
+}
+
+if (isDaisy) {
+  await withSpinner("Setting up DaisyUI", async () => {
+    await runQuiet("npm", ["install", "-D", "daisyui"], { cwd: projectDir });
+    await writeDaisyConfig(projectDir);
+  });
+}
 
 /* ---------- optional dev server ---------- */
 const { runDevChoice } = await inquirer.prompt([

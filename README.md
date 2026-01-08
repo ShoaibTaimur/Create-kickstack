@@ -28,6 +28,7 @@ When you run kickstack, it automatically:
 * Removes all demo and testing content
 * Gives you a clean `App` component
 * Optionally configures Tailwind CSS
+* Optionally configures DaisyUI (UI library)
 * Optionally adds React Router (data router)
 * Prompts to start the dev server after setup
 * Produces a project that runs instantly
@@ -44,6 +45,7 @@ Every project created with kickstack includes:
 * Minimal `App.jsx` / `App.tsx`
 * Empty `App.css`
 * Optional Tailwind CSS (v4)
+* Optional DaisyUI (Tailwind UI plugin)
 * `.gitignore` and `README.md`
 * Ready-to-run development server
 
@@ -68,7 +70,7 @@ When running the CLI, you’ll be prompted to select one of the following:
 
 Each option generates the correct files, dependencies, and configuration automatically.
 
-You can also choose to include **React Router (data router)** during setup.
+You can also choose to include **React Router (data router)** and an optional **UI library (DaisyUI)** during setup.
 
 ---
 
@@ -138,6 +140,18 @@ No manual setup required.
 
 ---
 
+### 🌼 DaisyUI ready (optional)
+
+DaisyUI is:
+
+* installed
+* configured in Tailwind
+* enabled in `index.css`
+
+No manual setup required.
+
+---
+
 ### 🧭 React Router ready (optional)
 
 Choose to include React Router (data router) and start with a clean router setup out of the box.
@@ -164,6 +178,7 @@ Uses the latest Vite template instead of hard-coding files.
 | Requires cleanup      | Ready immediately      |
 | Extra styles          | Clean styles           |
 | Manual Tailwind setup | Tailwind preconfigured |
+| Manual UI setup       | DaisyUI optional       |
 | Manual Router setup   | Router optional        |
 
 ---
