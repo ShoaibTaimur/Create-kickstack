@@ -12,7 +12,7 @@ It helps you start coding **immediately**, instead of deleting files first.
 
 ## ✨ What is kickstack?
 
-kickstack is an npm-based command-line tool that creates a fresh React project using the **latest Vite template**, while removing all default demo code and test styles.
+kickstack is an npm-based command-line tool that creates a fresh React project using a compatible **React + Vite template**, while removing all default demo code and test styles.
 
 Instead of logos, counters, and animations, you get a **blank, ready-to-build foundation**.
 
@@ -166,7 +166,7 @@ kickstack does **one thing well**:
 
 No heavy frameworks.
 No opinions forced on you.
-Uses the latest Vite template instead of hard-coding files.
+Uses a compatible Vite template instead of hard-coding files.
 
 ---
 
@@ -180,6 +180,24 @@ Uses the latest Vite template instead of hard-coding files.
 | Manual Tailwind setup | Tailwind preconfigured |
 | Manual UI setup       | DaisyUI optional       |
 | Manual Router setup   | Router optional        |
+
+---
+
+## 📝 Version Notes
+
+### v1.1.5
+
+* Added automatic npm conflict recovery for the generated project and optional package installs
+* Added compatibility-aware fallback for React Router, Tailwind CSS, and DaisyUI installs
+* Added clearer logs when kickstack detects a dependency conflict and retries with compatible versions
+* Added semver-based peer dependency matching instead of simple major-version guessing
+* Verified the JavaScript and TypeScript Tailwind flows locally end to end
+
+### v1.1.4
+
+* Fixed Tailwind CSS setup breaking when the latest Vite template moved ahead of `@tailwindcss/vite` peer support
+* Kept scaffolding on the latest Vite template while rewriting the generated project to a compatible Vite/plugin-react pair when needed
+* Added user-facing logs explaining why the compatibility fallback happened and what versions were selected
 
 ---
 

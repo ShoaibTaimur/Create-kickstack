@@ -4,6 +4,7 @@ import fs from "fs-extra";
 import path from "path";
 import { execa } from "execa";
 import inquirer from "inquirer";
+import semver from "semver";
 
 /* ---------- helpers ---------- */
 const run = (command, args, options = {}) =>
@@ -17,6 +18,26 @@ const runQuiet = async (command, args, options = {}) => {
     if (err.stderr) process.stderr.write(err.stderr);
     throw err;
   }
+};
+
+const getNpmViewJson = async (packageSpec, field) => {
+  const { stdout } = await runQuiet("npm", [
+    "view",
+    packageSpec,
+    field,
+    "--json",
+  ]);
+
+  if (!stdout || stdout.trim() === "" || stdout.trim() === "undefined") {
+    return null;
+  }
+
+  return JSON.parse(stdout);
+};
+
+const getNpmViewString = async (packageSpec, field) => {
+  const { stdout } = await runQuiet("npm", [ "view", packageSpec, field ]);
+  return stdout.trim();
 };
 
 const log = (message) => console.log(message);
@@ -141,6 +162,354 @@ module.exports = {
 }
 `;
   await fs.writeFile(configPath, contents);
+};
+
+const getVersionMajor = (value) => {
+  const match = String(value).match(/(\d+)/);
+  return match ? Number(match[1]) : null;
+};
+
+const toSavedRange = (version) => `^${version}`;
+
+const getSupportedMajorsFromRange = (range) => {
+  if (!range) return [];
+
+  return [...new Set(
+    [...String(range).matchAll(/(?:\^|~|>=|>|<=|<)?\s*(\d+)/g)]
+      .map((match) => Number(match[1]))
+      .filter((major) => Number.isInteger(major))
+  )].sort((a, b) => b - a);
+};
+
+const rangeSupportsMajor = (range, major) =>
+  getSupportedMajorsFromRange(range).includes(major);
+
+const getLatestCompatiblePackageMajor = async (
+  packageName,
+  peerName,
+  targetMajor
+) => {
+  const versions = await getNpmViewJson(packageName, "versions");
+  const majors = [...new Set(
+    versions
+      .map((version) => getVersionMajor(version))
+      .filter((major) => Number.isInteger(major))
+  )].sort((a, b) => b - a);
+
+  for (const major of majors) {
+    try {
+      const peerDependencies = await getNpmViewJson(
+        `${packageName}@${major}`,
+        "peerDependencies"
+      );
+
+      if (rangeSupportsMajor(peerDependencies?.[peerName], targetMajor)) {
+        return major;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+};
+
+const isOptionalPeer = (peerDependenciesMeta, peerName) =>
+  peerDependenciesMeta?.[peerName]?.optional === true;
+
+const hasCompatiblePeerSet = (
+  peerDependencies = {},
+  peerDependenciesMeta = {},
+  availablePackages = {}
+) =>
+  Object.entries(peerDependencies).every(([peerName, peerRange]) => {
+    const availableRange = availablePackages[peerName];
+
+    if (!availableRange) {
+      return isOptionalPeer(peerDependenciesMeta, peerName);
+    }
+
+    return semver.intersects(availableRange, peerRange, {
+      includePrerelease: true,
+    });
+  });
+
+const getLatestCompatiblePackageVersion = async (
+  packageName,
+  availablePackages
+) => {
+  const versions = await getNpmViewJson(packageName, "versions");
+  const stableVersions = versions.filter((version) => semver.valid(version));
+
+  for (const version of stableVersions.sort(semver.rcompare)) {
+    try {
+      const peerDependencies = await getNpmViewJson(
+        `${packageName}@${version}`,
+        "peerDependencies"
+      );
+      const peerDependenciesMeta = await getNpmViewJson(
+        `${packageName}@${version}`,
+        "peerDependenciesMeta"
+      ).catch(() => ({}));
+
+      if (
+        hasCompatiblePeerSet(
+          peerDependencies,
+          peerDependenciesMeta,
+          availablePackages
+        )
+      ) {
+        return version;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+};
+
+const cleanupInstallArtifacts = async (projectDir) => {
+  await fs.remove(path.join(projectDir, "node_modules"));
+  await fs.remove(path.join(projectDir, "package-lock.json"));
+};
+
+const isResolveError = (err) =>
+  err?.stderr?.includes("ERESOLVE") || err?.stdout?.includes("ERESOLVE");
+
+const getProjectPackageMap = (packageJson) => ({
+  ...(packageJson.dependencies ?? {}),
+  ...(packageJson.devDependencies ?? {}),
+});
+
+const installPackageSpecs = async (projectDir, packageSpecs, { dev = false } = {}) => {
+  const args = ["install"];
+
+  if (dev) {
+    args.push("-D");
+  }
+
+  args.push(...packageSpecs);
+
+  await runQuiet("npm", args, { cwd: projectDir });
+};
+
+const resolveRequestedPackageSpecs = async (
+  projectDir,
+  packageNames,
+  { dev = false } = {}
+) => {
+  const packageJsonPath = path.join(projectDir, "package.json");
+  const packageJson = await fs.readJson(packageJsonPath);
+  const availablePackages = getProjectPackageMap(packageJson);
+  const resolvedSpecs = [];
+  const resolutionLogs = [];
+
+  for (const packageName of packageNames) {
+    const latestVersion = await getNpmViewString(`${packageName}@latest`, "version");
+    const compatibleVersion = await getLatestCompatiblePackageVersion(
+      packageName,
+      availablePackages
+    );
+
+    if (!compatibleVersion) {
+      throw new Error(
+        `Could not find a compatible version for ${packageName} with the current project dependencies.`
+      );
+    }
+
+    availablePackages[packageName] = toSavedRange(compatibleVersion);
+    resolvedSpecs.push(`${packageName}@${compatibleVersion}`);
+
+    if (compatibleVersion !== latestVersion) {
+      resolutionLogs.push(
+        `- ${packageName}: latest is ${latestVersion}, using ${compatibleVersion} because of peer dependency compatibility.`
+      );
+    }
+  }
+
+  const targetKey = dev ? "devDependencies" : "dependencies";
+  packageJson[targetKey] = packageJson[targetKey] ?? {};
+
+  resolvedSpecs.forEach((spec) => {
+    const atIndex = spec.lastIndexOf("@");
+    const packageName = spec.slice(0, atIndex);
+    const version = spec.slice(atIndex + 1);
+    packageJson[targetKey][packageName] = toSavedRange(version);
+  });
+
+  await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 });
+
+  return { resolvedSpecs, resolutionLogs };
+};
+
+const resolveManifestPackageVersions = async (projectDir) => {
+  const packageJsonPath = path.join(projectDir, "package.json");
+  const packageJson = await fs.readJson(packageJsonPath);
+  const availablePackages = getProjectPackageMap(packageJson);
+  const resolutionLogs = [];
+
+  for (const sectionName of ["dependencies", "devDependencies"]) {
+    const section = packageJson[sectionName];
+
+    if (!section) {
+      continue;
+    }
+
+    for (const [packageName, currentRange] of Object.entries(section)) {
+      const compatibleVersion = await getLatestCompatiblePackageVersion(
+        packageName,
+        availablePackages
+      );
+
+      if (!compatibleVersion) {
+        throw new Error(
+          `Could not find a compatible version for ${packageName} while repairing the generated project dependencies.`
+        );
+      }
+
+      const compatibleRange = toSavedRange(compatibleVersion);
+      availablePackages[packageName] = compatibleRange;
+      section[packageName] = compatibleRange;
+
+      if (currentRange !== compatibleRange) {
+        resolutionLogs.push(
+          `- ${packageName}: changed ${currentRange} -> ${compatibleRange} to satisfy peer dependencies.`
+        );
+      }
+    }
+  }
+
+  await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 });
+
+  return resolutionLogs;
+};
+
+const installProjectDependenciesWithCompatibilityRetry = async (projectDir) => {
+  try {
+    await runQuiet("npm", ["install"], { cwd: projectDir });
+    return;
+  } catch (err) {
+    if (!isResolveError(err)) {
+      throw err;
+    }
+  }
+
+  console.log(
+    "⚠️  The generated project hit an npm dependency conflict during the initial install."
+  );
+  console.log(
+    "🧹 kickstack removed the partial install and is resolving the latest compatible versions from the generated manifest."
+  );
+
+  await cleanupInstallArtifacts(projectDir);
+
+  const resolutionLogs = await resolveManifestPackageVersions(projectDir);
+
+  if (resolutionLogs.length) {
+    resolutionLogs.forEach((line) => console.log(line));
+  } else {
+    console.log(
+      "ℹ️  No manifest version changes were needed. Retrying the install after cleanup."
+    );
+  }
+
+  await runQuiet("npm", ["install"], { cwd: projectDir });
+};
+
+const installPackagesWithCompatibilityRetry = async (
+  projectDir,
+  packageNames,
+  { dev = false, label } = {}
+) => {
+  try {
+    await installPackageSpecs(projectDir, packageNames, { dev });
+    return;
+  } catch (err) {
+    if (!isResolveError(err)) {
+      throw err;
+    }
+  }
+
+  console.log(
+    `⚠️  ${label} hit an npm dependency conflict while installing the latest package versions.`
+  );
+  console.log(
+    "🧹 kickstack removed the partial install and is resolving the latest compatible versions for your current project."
+  );
+
+  await cleanupInstallArtifacts(projectDir);
+
+  const { resolvedSpecs, resolutionLogs } = await resolveRequestedPackageSpecs(
+    projectDir,
+    packageNames,
+    { dev }
+  );
+
+  if (resolutionLogs.length) {
+    resolutionLogs.forEach((line) => console.log(line));
+  } else {
+    console.log(
+      "ℹ️  The conflict was caused by peer resolution timing. Retrying with explicit compatible package specs."
+    );
+  }
+
+  await installPackageSpecs(projectDir, resolvedSpecs, { dev });
+};
+
+const alignTailwindViteCompatibility = async (projectDir) => {
+  const packageJsonPath = path.join(projectDir, "package.json");
+  const packageJson = await fs.readJson(packageJsonPath);
+  const viteRange = packageJson.devDependencies?.vite;
+  const currentViteMajor = getVersionMajor(viteRange);
+
+  if (!currentViteMajor) {
+    return;
+  }
+
+  const tailwindPeerDependencies = await getNpmViewJson(
+    "@tailwindcss/vite@latest",
+    "peerDependencies"
+  );
+  const supportedViteMajors = getSupportedMajorsFromRange(
+    tailwindPeerDependencies?.vite
+  );
+
+  if (!supportedViteMajors.length || supportedViteMajors.includes(currentViteMajor)) {
+    return;
+  }
+
+  const targetViteMajor = supportedViteMajors[0];
+  const reactPluginPackage = packageJson.devDependencies?.["@vitejs/plugin-react-swc"]
+    ? "@vitejs/plugin-react-swc"
+    : "@vitejs/plugin-react";
+  const resolvedPluginVersion = await getLatestCompatiblePackageVersion(
+    reactPluginPackage,
+    {
+      ...getProjectPackageMap(packageJson),
+      vite: `^${targetViteMajor}.0.0`,
+    }
+  );
+
+  if (!resolvedPluginVersion) {
+    throw new Error(
+      `Could not find a ${reactPluginPackage} release compatible with Vite ${targetViteMajor}.`
+    );
+  }
+
+  packageJson.devDependencies.vite = `^${targetViteMajor}.0.0`;
+  packageJson.devDependencies[reactPluginPackage] =
+    toSavedRange(resolvedPluginVersion);
+
+  console.log(
+    `⚠️  Tailwind compatibility issue detected: the latest Vite template uses vite@${currentViteMajor}, but @tailwindcss/vite currently supports Vite ${supportedViteMajors.map((major) => `${major}`).join(", ")}.`
+  );
+  console.log(
+    `🔧 kickstack fixed this automatically by switching the generated project to vite@^${targetViteMajor}.0.0 and ${reactPluginPackage}@${toSavedRange(resolvedPluginVersion)} before installing dependencies.`
+  );
+
+  await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 });
+  await fs.remove(path.join(projectDir, "package-lock.json"));
 };
 
 /* ---------- project name ---------- */
@@ -333,32 +702,44 @@ const viteConfigPath = path.join(
 
 if (isTW || isDaisy) {
   await addTailwindToViteConfig(viteConfigPath, projectDir);
+
+  await withSpinner("Resolving Tailwind-compatible Vite versions", async () => {
+    await alignTailwindViteCompatibility(projectDir);
+  });
 }
 
 /* ---------- install dependencies ---------- */
 await withSpinner("Installing dependencies", async () => {
-  await runQuiet("npm", ["install"], { cwd: projectDir });
+  await installProjectDependenciesWithCompatibilityRetry(projectDir);
 });
 
 if (isRR) {
   await withSpinner("Setting up React Router", async () => {
-    await runQuiet("npm", ["install", "react-router"], { cwd: projectDir });
+    await installPackagesWithCompatibilityRetry(
+      projectDir,
+      ["react-router"],
+      { label: "React Router setup" }
+    );
   });
 }
 
 if (isTW || isDaisy) {
   await withSpinner("Setting up Tailwind CSS", async () => {
-    await runQuiet(
-      "npm",
-      ["install", "-D", "tailwindcss", "@tailwindcss/vite"],
-      { cwd: projectDir }
+    await installPackagesWithCompatibilityRetry(
+      projectDir,
+      ["tailwindcss", "@tailwindcss/vite"],
+      { dev: true, label: "Tailwind CSS setup" }
     );
   });
 }
 
 if (isDaisy) {
   await withSpinner("Setting up DaisyUI", async () => {
-    await runQuiet("npm", ["install", "-D", "daisyui"], { cwd: projectDir });
+    await installPackagesWithCompatibilityRetry(
+      projectDir,
+      ["daisyui"],
+      { dev: true, label: "DaisyUI setup" }
+    );
     await writeDaisyConfig(projectDir);
   });
 }
