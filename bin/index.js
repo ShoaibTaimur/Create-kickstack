@@ -164,6 +164,103 @@ module.exports = {
   await fs.writeFile(configPath, contents);
 };
 
+const writeFirebaseAuthScaffold = async (projectDir, { isTS, isRR }) => {
+  const ext = isTS ? "tsx" : "jsx";
+  const contextDir = path.join(projectDir, "src/Context");
+
+  await fs.ensureDir(contextDir);
+
+  await fs.writeFile(
+    path.join(contextDir, `AuthContext.${ext}`),
+    isTS
+      ? `import { createContext } from 'react'
+
+export const AuthContext = createContext<Record<string, never> | null>(null)
+`
+      : `import { createContext } from 'react'
+
+export const AuthContext = createContext(null)
+`
+  );
+
+  await fs.writeFile(
+    path.join(contextDir, `AuthProvider.${ext}`),
+    isTS
+      ? `import { ReactNode } from 'react'
+import { AuthContext } from './AuthContext'
+
+type AuthProviderProps = {
+  children: ReactNode
+}
+
+function AuthProvider({ children }: AuthProviderProps) {
+  const userInfo = {}
+
+  return (
+    <AuthContext value={userInfo}>
+      {children}
+    </AuthContext>
+  )
+}
+
+export default AuthProvider
+`
+      : `import { AuthContext } from './AuthContext'
+
+function AuthProvider({ children }) {
+  const userInfo = {}
+
+  return (
+    <AuthContext value={userInfo}>
+      {children}
+    </AuthContext>
+  )
+}
+
+export default AuthProvider
+`
+  );
+
+  await overwriteIfExists(
+    path.join(projectDir, `src/main.${ext}`),
+    isRR
+      ? `import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { createBrowserRouter, RouterProvider } from 'react-router'
+import './index.css'
+import App from './App'
+import AuthProvider from './Context/AuthProvider'
+
+const router = createBrowserRouter([
+  { path: '/', element: <App /> },
+])
+
+createRoot(document.getElementById('root')${isTS ? "!" : ""}).render(
+  <StrictMode>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
+  </StrictMode>
+)
+`
+      : `import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App'
+import AuthProvider from './Context/AuthProvider'
+
+createRoot(document.getElementById('root')${isTS ? "!" : ""}).render(
+  <StrictMode>
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  </StrictMode>
+)
+`,
+    projectDir
+  );
+};
+
 const getVersionMajor = (value) => {
   const match = String(value).match(/(\d+)/);
   return match ? Number(match[1]) : null;
@@ -571,10 +668,24 @@ const { uiLibrary } = await inquirer.prompt([
   },
 ]);
 
+const { useFirebase } = await inquirer.prompt([
+  {
+    type: "list",
+    name: "useFirebase",
+    message: "Include Firebase auth scaffolding?",
+    choices: [
+      { name: "Yes — install firebase and scaffold auth context/provider", value: true },
+      { name: "No", value: false },
+    ],
+    default: false,
+  },
+]);
+
 const isTS = variant.includes("TypeScript");
 const isTW = variant.includes("Tailwind");
 const isRR = useRouter === true;
 const isDaisy = uiLibrary === "daisyui";
+const hasFirebase = useFirebase === true;
 const ext = isTS ? "tsx" : "jsx";
 const template = isTS ? "react-ts" : "react";
 
@@ -694,6 +805,12 @@ export default App
   }
 });
 
+if (hasFirebase) {
+  await withSpinner("Scaffolding Firebase auth context", async () => {
+    await writeFirebaseAuthScaffold(projectDir, { isTS, isRR });
+  });
+}
+
 /* ---------- Vite config ---------- */
 const viteConfigPath = path.join(
   projectDir,
@@ -741,6 +858,16 @@ if (isDaisy) {
       { dev: true, label: "DaisyUI setup" }
     );
     await writeDaisyConfig(projectDir);
+  });
+}
+
+if (hasFirebase) {
+  await withSpinner("Setting up Firebase", async () => {
+    await installPackagesWithCompatibilityRetry(
+      projectDir,
+      ["firebase"],
+      { label: "Firebase setup" }
+    );
   });
 }
 

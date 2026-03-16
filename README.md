@@ -30,6 +30,7 @@ When you run kickstack, it automatically:
 * Optionally configures Tailwind CSS
 * Optionally configures DaisyUI (UI library)
 * Optionally adds React Router (data router)
+* Optionally installs Firebase and scaffolds auth context/provider files
 * Prompts to start the dev server after setup
 * Produces a project that runs instantly
 
@@ -46,6 +47,7 @@ Every project created with kickstack includes:
 * Empty `App.css`
 * Optional Tailwind CSS (v4)
 * Optional DaisyUI (Tailwind UI plugin)
+* Optional Firebase auth scaffold
 * `.gitignore` and `README.md`
 * Ready-to-run development server
 
@@ -70,7 +72,7 @@ When running the CLI, you’ll be prompted to select one of the following:
 
 Each option generates the correct files, dependencies, and configuration automatically.
 
-You can also choose to include **React Router (data router)** and an optional **UI library (DaisyUI)** during setup.
+You can also choose to include **React Router (data router)**, an optional **UI library (DaisyUI)**, and optional **Firebase auth scaffolding** during setup.
 
 ---
 
@@ -158,6 +160,20 @@ Choose to include React Router (data router) and start with a clean router setup
 
 ---
 
+### 🔐 Firebase auth scaffold (optional)
+
+Choose Firebase during setup and kickstack will:
+
+* install `firebase`
+* create `src/Context/AuthContext.jsx` / `AuthContext.tsx`
+* create `src/Context/AuthProvider.jsx` / `AuthProvider.tsx`
+* wrap your app with `AuthProvider` in `main.jsx` / `main.tsx`
+* include a starter `userInfo` object in the provider
+
+This keeps the setup minimal while giving you the auth structure up front.
+
+---
+
 ### 🪶 Lightweight and focused
 
 kickstack does **one thing well**:
@@ -180,10 +196,19 @@ Uses a compatible Vite template instead of hard-coding files.
 | Manual Tailwind setup | Tailwind preconfigured |
 | Manual UI setup       | DaisyUI optional       |
 | Manual Router setup   | Router optional        |
+| Manual auth scaffold  | Firebase scaffold optional |
 
 ---
 
 ## 📝 Version Notes
+
+### v1.1.6
+
+* Added an optional Firebase setup prompt during project creation
+* Installed `firebase` automatically when that option is selected
+* Scaffolded `AuthContext` and `AuthProvider` files for both JavaScript and TypeScript projects
+* Wrapped the generated app with `AuthProvider` in `main.jsx` / `main.tsx`
+* Added a starter `userInfo` object inside the generated auth provider
 
 ### v1.1.5
 
@@ -257,6 +282,9 @@ my-app/
 ├─ src/
 │  ├─ App.jsx
 │  ├─ App.css
+│  ├─ Context/
+│  │  ├─ AuthContext.jsx
+│  │  └─ AuthProvider.jsx
 │  ├─ main.jsx
 │  └─ index.css
 ├─ public/
