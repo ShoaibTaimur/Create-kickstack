@@ -230,6 +230,64 @@ module.exports = {
   await fs.writeFile(configPath, contents);
 };
 
+const getServerIndexContents = () => `const express = require("express")
+const cors = require("cors")
+const dotenv = require("dotenv")
+const { MongoClient, ServerApiVersion } = require("mongodb")
+
+dotenv.config()
+
+const app = express()
+const port = process.env.PORT || 5000
+
+app.use(cors())
+app.use(express.json())
+
+const uri = process.env.MONGODB_URI
+
+let client = null
+
+if (uri) {
+  client = new MongoClient(uri, {
+    serverApi: {
+      version: ServerApiVersion.v1,
+      strict: true,
+      deprecationErrors: true,
+    },
+  })
+}
+
+app.get("/", (_req, res) => {
+  res.send("Server is running")
+})
+
+app.listen(port, () => {
+  console.log(\`Server is running on port \${port}\`)
+})
+`;
+
+const setupServerProject = async (projectDir) => {
+  await fs.ensureDir(projectDir);
+
+  await runQuiet("npm", ["init", "-y"], { cwd: projectDir });
+
+  const packageJsonPath = path.join(projectDir, "package.json");
+  const packageJson = await fs.readJson(packageJsonPath);
+  packageJson.scripts = {
+    start: "node index.js",
+    test: 'echo "Error: no test specified" && exit 1',
+  };
+  await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 });
+
+  await fs.writeFile(path.join(projectDir, "index.js"), getServerIndexContents());
+
+  await installPackagesWithCompatibilityRetry(
+    projectDir,
+    ["express", "cors", "mongodb", "dotenv"],
+    { label: "Server dependency setup" }
+  );
+};
+
 const getCleanAppContents = ({ useAppCss }) =>
   useAppCss
     ? `import './App.css'
@@ -1002,6 +1060,45 @@ if (await fs.pathExists(projectDir)) {
   process.exit(1);
 }
 
+const { projectType } = await inquirer.prompt([
+  {
+    type: "list",
+    name: "projectType",
+    message: "Choose a project type:",
+    choices: [
+      { name: "Client-side", value: "client" },
+      { name: "Server-side", value: "server" },
+    ],
+    default: "client",
+  },
+]);
+
+if (projectType === "server") {
+  log(`📍 Using local kickstack from ${path.resolve(process.cwd())}`);
+  log("🧩 Template: Server-side");
+
+  await withSpinner("Scaffolding Node server project", async () => {
+    await setupServerProject(projectDir);
+  });
+
+  const { runServerChoice } = await inquirer.prompt([
+    {
+      type: "list",
+      name: "runServerChoice",
+      message: "Start the server now?",
+      choices: ["Yes", "No"],
+      default: "No",
+    },
+  ]);
+
+  if (runServerChoice === "Yes") {
+    await run("npm", ["start"], { cwd: projectDir });
+  }
+
+  console.log("✅ Project ready!");
+  console.log(`👉 cd ${projectName}`);
+  console.log("👉 npm start");
+} else {
 /* ---------- select variant ---------- */
 const { variant } = await inquirer.prompt([
   {
@@ -1280,3 +1377,4 @@ if (runDevChoice === "Yes") {
 console.log("✅ Project ready!");
 console.log(`👉 cd ${projectName}`);
 console.log("👉 npm run dev");
+}

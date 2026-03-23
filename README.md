@@ -1,6 +1,6 @@
 # 🚀 kickstack
 
-**kickstack** is a lightweight CLI tool that scaffolds a **clean, minimal React + Vite project** — without demo clutter, boilerplate noise, or unnecessary setup.
+**kickstack** is a lightweight CLI tool that scaffolds a **clean client-side or server-side starter project** — without demo clutter, boilerplate noise, or unnecessary setup.
 
 It helps you start coding **immediately**, instead of deleting files first.
 
@@ -12,9 +12,9 @@ It helps you start coding **immediately**, instead of deleting files first.
 
 ## ✨ What is kickstack?
 
-kickstack is an npm-based command-line tool that creates a fresh React project using a compatible **React + Vite template**, while removing all default demo code and test styles.
+kickstack is an npm-based command-line tool that can create either a fresh **client-side React + Vite project** or a minimal **server-side Node.js starter**, while keeping the generated project clean and ready to build on.
 
-Instead of logos, counters, and animations, you get a **blank, ready-to-build foundation**.
+Instead of boilerplate clutter, you get a **blank, ready-to-build foundation**.
 
 > Think of it as a clean canvas instead of a demo showroom.
 
@@ -24,22 +24,26 @@ Instead of logos, counters, and animations, you get a **blank, ready-to-build fo
 
 When you run kickstack, it automatically:
 
-* Creates a React project powered by Vite
-* Removes all demo and testing content
-* Gives you a clean `App` component
+* Starts with a project type prompt for **client-side** or **server-side** scaffolding
+* Creates a React project powered by Vite when you choose the client-side path
+* Creates a Node.js + Express starter when you choose the server-side path
+* Removes demo and testing content from the generated client app
+* Gives you a clean starter entry file for the selected project type
 * Optionally configures Tailwind CSS
 * Optionally configures DaisyUI (UI library)
 * Optionally configures shadcn/ui for TypeScript projects
 * Optionally adds React Router (data router)
 * Optionally installs Firebase and scaffolds auth context/provider files
-* Prompts to start the dev server after setup
+* Prompts to start the generated app or server after setup
 * Produces a project that runs instantly
 
 ---
 
 ## 📦 What you get by default
 
-Every project created with kickstack includes:
+Every project created with kickstack includes a clean, runnable starter.
+
+For **client-side** projects, kickstack includes:
 
 * React + Vite
 * Clean `index.html`
@@ -53,6 +57,14 @@ Every project created with kickstack includes:
 * `.gitignore` and `README.md`
 * Ready-to-run development server
 
+For **server-side** projects, kickstack includes:
+
+* `npm init -y` project setup
+* `index.js` starter file
+* `npm start` script wired in `package.json`
+* `express`, `cors`, `mongodb`, and `dotenv` installed
+* A minimal Express server that starts immediately
+
 The default UI is intentionally simple:
 
 ```jsx
@@ -65,7 +77,12 @@ Nothing extra. No clutter.
 
 ## 🎯 Project variants you can choose
 
-When running the CLI, you’ll be prompted to select one of the following:
+When running the CLI, you’ll first choose between:
+
+1. **Client-side**
+2. **Server-side**
+
+If you choose **client-side**, you’ll then be prompted to select one of the following:
 
 1. **React (JavaScript)**
 2. **React + Tailwind (JavaScript)**
@@ -221,6 +238,13 @@ Uses a compatible Vite template instead of hard-coding files.
 
 ## 📝 Version Notes
 
+### v1.3.0
+
+* Added a new top-level **project type** prompt with **client-side** and **server-side** options
+* Added a **server-side** scaffolder that runs `npm init -y`, writes an `index.js` starter, updates the `start` script, and installs `express`, `cors`, `mongodb`, and `dotenv`
+* Kept the existing React + Vite flow under the **client-side** path
+* Added a server-side startup prompt so the generated backend can be run immediately with `npm start`
+
 ### v1.2.0
 
 * Added optional **shadcn/ui** setup for TypeScript projects
@@ -276,27 +300,30 @@ npm -v
 ### Create a new project
 
 ```bash
-npm kickstack my-app
-```
-
-or
-
-```bash
 npx kickstack@latest my-app
 ```
 
-Follow the prompts to choose your preferred setup.
+Follow the prompts to choose whether you want a **client-side** or **server-side** starter, then select the available options for that path.
 
 ---
 
-### Start the development server
+### Start the generated project
+
+For a client-side app:
 
 ```bash
 cd my-app
 npm run dev
 ```
 
-Your app will be available at:
+For a server-side app:
+
+```bash
+cd my-app
+npm start
+```
+
+The client app will be available at:
 
 ```
 http://localhost:5173
