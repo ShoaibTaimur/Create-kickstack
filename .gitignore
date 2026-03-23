@@ -50,3 +50,5 @@ tmp/
 .yarn/cache/
 .yarn/unplugged/
 package-lock.json
+node_modules
+my-test-app

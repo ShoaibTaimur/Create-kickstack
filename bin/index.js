@@ -127,12 +127,12 @@ const addTailwindToViteConfig = async (filePath, projectDir) => {
     return;
   }
 
-  const hasReactImport = contents.match(
-    /import\s+react\s+from\s+['"]@vitejs\/plugin-react['"]/
+  const reactPluginImport = contents.match(
+    /import\s+react\s+from\s+['"]@vitejs\/plugin-react(?:-swc)?['"]/
   );
-  if (hasReactImport) {
+  if (reactPluginImport) {
     contents = contents.replace(
-      /import\s+react\s+from\s+['"]@vitejs\/plugin-react['"]\s*\n/,
+      /import\s+react\s+from\s+['"]@vitejs\/plugin-react(?:-swc)?['"]\s*\n/,
       (match) => `${match}import tailwindcss from '@tailwindcss/vite'\n`
     );
   } else {
@@ -153,6 +153,72 @@ const addTailwindToViteConfig = async (filePath, projectDir) => {
   await fs.writeFile(filePath, withPlugin);
 };
 
+const ensureTsconfigAlias = async (projectDir) => {
+  const targets = ["tsconfig.json", "tsconfig.app.json"];
+
+  for (const filename of targets) {
+    const tsconfigPath = path.join(projectDir, filename);
+    const exists = await fs.pathExists(tsconfigPath);
+
+    if (!exists) {
+      continue;
+    }
+
+    const rawTsconfig = await fs.readFile(tsconfigPath, "utf8");
+    const tsconfig = JSON.parse(
+      rawTsconfig
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "")
+    );
+    tsconfig.compilerOptions = tsconfig.compilerOptions ?? {};
+    tsconfig.compilerOptions.baseUrl = tsconfig.compilerOptions.baseUrl ?? ".";
+    tsconfig.compilerOptions.paths = {
+      ...(tsconfig.compilerOptions.paths ?? {}),
+      "@/*": ["./src/*"],
+    };
+    await fs.writeJson(tsconfigPath, tsconfig, { spaces: 2 });
+  }
+};
+
+const ensureViteAlias = async (filePath, projectDir) => {
+  const exists = await fs.pathExists(filePath);
+  if (!exists) {
+    const rel = path.relative(projectDir, filePath);
+    console.warn(`⚠️  Skipping missing file: ${rel}`);
+    return;
+  }
+
+  let contents = await fs.readFile(filePath, "utf8");
+  if (contents.includes('"@": path.resolve(__dirname, "./src")')) {
+    return;
+  }
+
+  if (!contents.includes('import path from "path"') && !contents.includes("import path from 'path'")) {
+    contents = `import path from "path"\n${contents}`;
+  }
+
+  if (contents.includes("resolve:")) {
+    if (contents.includes("alias:")) {
+      contents = contents.replace(
+        /alias:\s*\{/,
+        `alias: {\n      "@": path.resolve(__dirname, "./src"),`
+      );
+    } else {
+      contents = contents.replace(
+        /resolve:\s*\{/,
+        `resolve: {\n    alias: {\n      "@": path.resolve(__dirname, "./src"),\n    },`
+      );
+    }
+  } else {
+    contents = contents.replace(
+      /export\s+default\s+defineConfig\(\{/,
+      `export default defineConfig({\n  resolve: {\n    alias: {\n      "@": path.resolve(__dirname, "./src"),\n    },\n  },`
+    );
+  }
+
+  await fs.writeFile(filePath, contents);
+};
+
 const writeDaisyConfig = async (projectDir) => {
   const configPath = path.join(projectDir, "tailwind.config.cjs");
   const contents = `/** @type {import('tailwindcss').Config} */
@@ -162,6 +228,315 @@ module.exports = {
 }
 `;
   await fs.writeFile(configPath, contents);
+};
+
+const getCleanAppContents = ({ useAppCss }) =>
+  useAppCss
+    ? `import './App.css'
+
+function App() {
+  return (
+    <div>
+      <p>Welcome to the project</p>
+    </div>
+  )
+}
+
+export default App
+`
+    : `function App() {
+  return (
+    <div>
+      <p>Welcome to the project</p>
+    </div>
+  )
+}
+
+export default App
+`;
+
+const getCleanMainContents = ({ isTS, isRR, hasFirebase, useShadcn }) => {
+  const lines = [
+    "import { StrictMode } from 'react'",
+    "import { createRoot } from 'react-dom/client'",
+  ];
+
+  if (isRR) {
+    lines.push("import { createBrowserRouter, RouterProvider } from 'react-router'");
+  }
+
+  lines.push("import './index.css'");
+  lines.push("import App from './App'");
+
+  if (hasFirebase) {
+    lines.push("import AuthProvider from './Context/AuthProvider'");
+  }
+
+  if (useShadcn) {
+    lines.push("import { ThemeProvider } from './components/theme-provider'");
+  }
+
+  const body = [];
+
+  if (isRR) {
+    body.push("");
+    body.push("const router = createBrowserRouter([");
+    body.push("  { path: '/', element: <App /> },");
+    body.push("])");
+  }
+
+  body.push("");
+  body.push(`createRoot(document.getElementById('root')${isTS ? "!" : ""}).render(`);
+  body.push("  <StrictMode>");
+
+  const wrappers = [];
+  if (useShadcn) {
+    wrappers.push("<ThemeProvider>");
+  }
+  if (hasFirebase) {
+    wrappers.push("<AuthProvider>");
+  }
+
+  wrappers.forEach((wrapper, index) => {
+    body.push(`${"  ".repeat(index + 2)}${wrapper}`);
+  });
+
+  const renderLine = isRR ? "<RouterProvider router={router} />" : "<App />";
+  body.push(`${"  ".repeat(wrappers.length + 2)}${renderLine}`);
+
+  [...wrappers].reverse().forEach((wrapper, index) => {
+    const tagName = wrapper.match(/<([A-Za-z0-9_]+)/)?.[1];
+    body.push(`${"  ".repeat(wrappers.length - index + 1)}</${tagName}>`);
+  });
+
+  body.push("  </StrictMode>");
+  body.push(")");
+
+  return [...lines, ...body, ""].join("\n");
+};
+
+const getShadcnThemeProviderContents = () => `/* eslint-disable react-refresh/only-export-components */
+import * as React from "react"
+
+type Theme = "dark" | "light"
+
+type ThemeProviderProps = {
+  children: React.ReactNode
+  defaultTheme?: Theme
+  storageKey?: string
+  disableTransitionOnChange?: boolean
+}
+
+type ThemeProviderState = {
+  theme: Theme
+  setTheme: (theme: Theme) => void
+}
+
+const THEME_VALUES: Theme[] = ["dark", "light"]
+
+const ThemeProviderContext = React.createContext<
+  ThemeProviderState | undefined
+>(undefined)
+
+function isTheme(value: string | null): value is Theme {
+  if (value === null) {
+    return false
+  }
+
+  return THEME_VALUES.includes(value as Theme)
+}
+
+function disableTransitionsTemporarily() {
+  const style = document.createElement("style")
+  style.appendChild(
+    document.createTextNode(
+      "*,*::before,*::after{-webkit-transition:none!important;transition:none!important}"
+    )
+  )
+  document.head.appendChild(style)
+
+  return () => {
+    window.getComputedStyle(document.body)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        style.remove()
+      })
+    })
+  }
+}
+
+export function ThemeProvider({
+  children,
+  defaultTheme = "light",
+  storageKey = "theme",
+  disableTransitionOnChange = true,
+  ...props
+}: ThemeProviderProps) {
+  const [theme, setThemeState] = React.useState<Theme>(() => {
+    const storedTheme = localStorage.getItem(storageKey)
+    if (isTheme(storedTheme)) {
+      return storedTheme
+    }
+
+    return defaultTheme
+  })
+
+  const setTheme = React.useCallback(
+    (nextTheme: Theme) => {
+      localStorage.setItem(storageKey, nextTheme)
+      setThemeState(nextTheme)
+    },
+    [storageKey]
+  )
+
+  const applyTheme = React.useCallback(
+    (nextTheme: Theme) => {
+      const root = document.documentElement
+      const restoreTransitions = disableTransitionOnChange
+        ? disableTransitionsTemporarily()
+        : null
+
+      root.classList.remove("light", "dark")
+      root.classList.add(nextTheme)
+
+      if (restoreTransitions) {
+        restoreTransitions()
+      }
+    },
+    [disableTransitionOnChange]
+  )
+
+  React.useEffect(() => {
+    applyTheme(theme)
+  }, [theme, applyTheme])
+
+  React.useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.storageArea !== localStorage) {
+        return
+      }
+
+      if (event.key !== storageKey) {
+        return
+      }
+
+      if (isTheme(event.newValue)) {
+        setThemeState(event.newValue)
+        return
+      }
+
+      setThemeState(defaultTheme)
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange)
+    }
+  }, [defaultTheme, storageKey])
+
+  const value = React.useMemo(
+    () => ({
+      theme,
+      setTheme,
+    }),
+    [theme, setTheme]
+  )
+
+  return (
+    <ThemeProviderContext.Provider {...props} value={value}>
+      {children}
+    </ThemeProviderContext.Provider>
+  )
+}
+
+export const useTheme = () => {
+  const context = React.useContext(ThemeProviderContext)
+
+  if (context === undefined) {
+    throw new Error("useTheme must be used within a ThemeProvider")
+  }
+
+  return context
+}
+`;
+
+const writeShadcnThemeProvider = async (projectDir) => {
+  const componentDir = path.join(projectDir, "src/components");
+  await fs.ensureDir(componentDir);
+  await fs.writeFile(
+    path.join(componentDir, "theme-provider.tsx"),
+    getShadcnThemeProviderContents()
+  );
+};
+
+const removeShadcnDemoArtifacts = async (projectDir) => {
+  await fs.remove(path.join(projectDir, "src/components/ui"));
+  await fs.remove(path.join(projectDir, "public/favicon.svg"));
+  await fs.remove(path.join(projectDir, "public/icons.svg"));
+};
+
+const applyCleanCanvasFiles = async (
+  projectDir,
+  { isTS, isRR, hasFirebase, useShadcn, useAppCss }
+) => {
+  const ext = isTS ? "tsx" : "jsx";
+
+  await overwriteIfExists(
+    path.join(projectDir, `src/main.${ext}`),
+    getCleanMainContents({ isTS, isRR, hasFirebase, useShadcn }),
+    projectDir
+  );
+
+  await overwriteIfExists(
+    path.join(projectDir, `src/App.${ext}`),
+    getCleanAppContents({ useAppCss }),
+    projectDir
+  );
+
+  if (useShadcn) {
+    await removeShadcnDemoArtifacts(projectDir);
+  }
+
+  if (useAppCss) {
+    await overwriteIfExists(path.join(projectDir, "src/App.css"), "", projectDir);
+  } else {
+    await fs.remove(path.join(projectDir, "src/App.css"));
+  }
+};
+
+const initializeShadcnWithRetry = async (projectDir) => {
+  const args = [
+    "shadcn@latest",
+    "init",
+    "-t",
+    "vite",
+    "-d",
+    "--cwd",
+    projectDir,
+  ];
+
+  try {
+    await runQuiet("npx", args);
+    return;
+  } catch (err) {
+    if (!isResolveError(err)) {
+      throw err;
+    }
+  }
+
+  console.log(
+    "⚠️  shadcn/ui hit an npm dependency conflict while applying its official Vite setup."
+  );
+  console.log(
+    "🧹 kickstack is repairing the generated project dependencies and retrying shadcn/ui initialization."
+  );
+
+  await cleanupInstallArtifacts(projectDir);
+  const resolutionLogs = await resolveManifestPackageVersions(projectDir);
+  resolutionLogs.forEach((line) => console.log(line));
+  await runQuiet("npm", ["install"], { cwd: projectDir });
+  await runQuiet("npx", args);
 };
 
 const writeFirebaseAuthScaffold = async (projectDir, { isTS, isRR }) => {
@@ -186,7 +561,7 @@ export const AuthContext = createContext(null)
   await fs.writeFile(
     path.join(contextDir, `AuthProvider.${ext}`),
     isTS
-      ? `import { ReactNode } from 'react'
+      ? `import type { ReactNode } from 'react'
 import { AuthContext } from './AuthContext'
 
 type AuthProviderProps = {
@@ -663,6 +1038,11 @@ const { uiLibrary } = await inquirer.prompt([
     choices: [
       { name: "None", value: "none" },
       { name: "DaisyUI", value: "daisyui" },
+      {
+        name: "shadcn/ui (TypeScript only)",
+        value: "shadcn",
+        disabled: !variant.includes("TypeScript") && "Requires a TypeScript project",
+      },
     ],
     default: "none",
   },
@@ -685,9 +1065,21 @@ const isTS = variant.includes("TypeScript");
 const isTW = variant.includes("Tailwind");
 const isRR = useRouter === true;
 const isDaisy = uiLibrary === "daisyui";
+const isShadcn = uiLibrary === "shadcn";
 const hasFirebase = useFirebase === true;
 const ext = isTS ? "tsx" : "jsx";
 const template = isTS ? "react-ts" : "react";
+
+if (isShadcn && !isTS) {
+  console.error("❌ shadcn/ui setup is only available for TypeScript projects");
+  process.exit(1);
+}
+
+if (isShadcn && isTW) {
+  console.log(
+    "ℹ️  TypeScript + Tailwind was selected with shadcn/ui. kickstack will treat the Tailwind variant as a compatibility no-op because shadcn/ui applies its own Tailwind setup."
+  );
+}
 
 /* ---------- scaffold via Vite ---------- */
 log(`📍 Using local kickstack from ${path.resolve(process.cwd())}`);
@@ -722,60 +1114,19 @@ await withSpinner("Cleaning Vite demo files", async () => {
   await fs.remove(path.join(projectDir, "src/assets"));
   await fs.remove(path.join(projectDir, "public/vite.svg"));
 
-  await overwriteIfExists(
-    path.join(projectDir, `src/main.${ext}`),
-    isRR
-      ? `import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { createBrowserRouter, RouterProvider } from 'react-router'
-import './index.css'
-import App from './App'
+  await applyCleanCanvasFiles(projectDir, {
+    isTS,
+    isRR,
+    hasFirebase: false,
+    useShadcn: false,
+    useAppCss: true,
+  });
 
-const router = createBrowserRouter([
-  { path: '/', element: <App /> },
-])
-
-createRoot(document.getElementById('root')${isTS ? "!" : ""}).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>
-)
-`
-      : `import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App'
-
-createRoot(document.getElementById('root')${isTS ? "!" : ""}).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-)
-`,
-    projectDir
-  );
-
-  await overwriteIfExists(
-    path.join(projectDir, `src/App.${ext}`),
-    `import './App.css'
-
-function App() {
-  return (
-    <>
-      <h1>Welcome to my project</h1>
-    </>
-  )
-}
-
-export default App
-`,
-    projectDir
-  );
-
-  await overwriteIfExists(path.join(projectDir, "src/App.css"), "", projectDir);
   await overwriteIfExists(
     path.join(projectDir, "src/index.css"),
-    isDaisy
+    isShadcn
+      ? `@import "tailwindcss";`
+      : isDaisy
       ? `@import "tailwindcss";
 @plugin "daisyui";
 `
@@ -796,7 +1147,7 @@ export default App
     );
   }
 
-  if ((isTW || isDaisy) && !cssContents.includes("@import \"tailwindcss\"")) {
+  if ((isTW || isDaisy || isShadcn) && !cssContents.includes("@import \"tailwindcss\"")) {
     throw new Error("Tailwind setup failed: index.css was not updated.");
   }
 
@@ -805,24 +1156,24 @@ export default App
   }
 });
 
-if (hasFirebase) {
-  await withSpinner("Scaffolding Firebase auth context", async () => {
-    await writeFirebaseAuthScaffold(projectDir, { isTS, isRR });
-  });
-}
-
 /* ---------- Vite config ---------- */
 const viteConfigPath = path.join(
   projectDir,
   `vite.config.${isTS ? "ts" : "js"}`
 );
 
-if (isTW || isDaisy) {
+if ((isTW || isDaisy) && !isShadcn) {
   await addTailwindToViteConfig(viteConfigPath, projectDir);
 
   await withSpinner("Resolving Tailwind-compatible Vite versions", async () => {
     await alignTailwindViteCompatibility(projectDir);
   });
+}
+
+if (isShadcn) {
+  await addTailwindToViteConfig(viteConfigPath, projectDir);
+  await ensureViteAlias(viteConfigPath, projectDir);
+  await ensureTsconfigAlias(projectDir);
 }
 
 /* ---------- install dependencies ---------- */
@@ -840,7 +1191,7 @@ if (isRR) {
   });
 }
 
-if (isTW || isDaisy) {
+if ((isTW || isDaisy) && !isShadcn) {
   await withSpinner("Setting up Tailwind CSS", async () => {
     await installPackagesWithCompatibilityRetry(
       projectDir,
@@ -861,6 +1212,31 @@ if (isDaisy) {
   });
 }
 
+if (isShadcn) {
+  await withSpinner("Preparing Tailwind for shadcn/ui", async () => {
+    await installPackagesWithCompatibilityRetry(
+      projectDir,
+      ["tailwindcss", "@tailwindcss/vite"],
+      { dev: true, label: "shadcn/ui Tailwind setup" }
+    );
+  });
+
+  await withSpinner("Setting up shadcn/ui", async () => {
+    await initializeShadcnWithRetry(projectDir);
+  });
+
+  await withSpinner("Applying kickstack shadcn clean canvas", async () => {
+    await writeShadcnThemeProvider(projectDir);
+    await applyCleanCanvasFiles(projectDir, {
+      isTS,
+      isRR,
+      hasFirebase: false,
+      useShadcn: true,
+      useAppCss: false,
+    });
+  });
+}
+
 if (hasFirebase) {
   await withSpinner("Setting up Firebase", async () => {
     await installPackagesWithCompatibilityRetry(
@@ -869,7 +1245,21 @@ if (hasFirebase) {
       { label: "Firebase setup" }
     );
   });
+
+  await withSpinner("Scaffolding Firebase auth context", async () => {
+    await writeFirebaseAuthScaffold(projectDir, { isTS, isRR });
+  });
 }
+
+await withSpinner("Finalizing starter files", async () => {
+  await applyCleanCanvasFiles(projectDir, {
+    isTS,
+    isRR,
+    hasFirebase,
+    useShadcn: isShadcn,
+    useAppCss: !isShadcn,
+  });
+});
 
 /* ---------- optional dev server ---------- */
 const { runDevChoice } = await inquirer.prompt([

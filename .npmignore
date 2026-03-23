@@ -15,5 +15,7 @@ dist
 test
 tests
 test-project
+my-test-app
 *.tgz
 *.log
+node_modules

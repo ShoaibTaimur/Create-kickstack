@@ -29,6 +29,7 @@ When you run kickstack, it automatically:
 * Gives you a clean `App` component
 * Optionally configures Tailwind CSS
 * Optionally configures DaisyUI (UI library)
+* Optionally configures shadcn/ui for TypeScript projects
 * Optionally adds React Router (data router)
 * Optionally installs Firebase and scaffolds auth context/provider files
 * Prompts to start the dev server after setup
@@ -47,6 +48,7 @@ Every project created with kickstack includes:
 * Empty `App.css`
 * Optional Tailwind CSS (v4)
 * Optional DaisyUI (Tailwind UI plugin)
+* Optional shadcn/ui setup for TypeScript projects
 * Optional Firebase auth scaffold
 * `.gitignore` and `README.md`
 * Ready-to-run development server
@@ -54,7 +56,7 @@ Every project created with kickstack includes:
 The default UI is intentionally simple:
 
 ```jsx
-<h1>Welcome to my project</h1>
+<p>Welcome to the project</p>
 ```
 
 Nothing extra. No clutter.
@@ -73,6 +75,9 @@ When running the CLI, you’ll be prompted to select one of the following:
 Each option generates the correct files, dependencies, and configuration automatically.
 
 You can also choose to include **React Router (data router)**, an optional **UI library (DaisyUI)**, and optional **Firebase auth scaffolding** during setup.
+
+For TypeScript projects, the UI library prompt also supports **shadcn/ui**.
+If you choose the `React + TypeScript + Tailwind` variant with **shadcn/ui**, kickstack treats the Tailwind variant as a compatibility no-op because shadcn/ui already applies the Tailwind setup it needs.
 
 ---
 
@@ -154,6 +159,19 @@ No manual setup required.
 
 ---
 
+### 🧩 shadcn/ui ready (optional, TypeScript only)
+
+Choose shadcn/ui during setup and kickstack will:
+
+* apply the official shadcn/ui Vite initialization flow
+* keep the generated project on a clean canvas instead of leaving starter UI clutter behind
+* keep the shadcn/ui setup ready for adding components later
+* preserve kickstack router and Firebase scaffolding choices on top of the initialized project
+
+This keeps the setup aligned with the official shadcn/ui tooling instead of freezing a copied template in the CLI.
+
+---
+
 ### 🧭 React Router ready (optional)
 
 Choose to include React Router (data router) and start with a clean router setup out of the box.
@@ -195,12 +213,23 @@ Uses a compatible Vite template instead of hard-coding files.
 | Extra styles          | Clean styles           |
 | Manual Tailwind setup | Tailwind preconfigured |
 | Manual UI setup       | DaisyUI optional       |
+| Manual shadcn setup   | shadcn/ui optional     |
 | Manual Router setup   | Router optional        |
 | Manual auth scaffold  | Firebase scaffold optional |
 
 ---
 
 ## 📝 Version Notes
+
+### v1.2.0
+
+* Added optional **shadcn/ui** setup for TypeScript projects
+* Integrated shadcn/ui through its official Vite initialization flow instead of copying a frozen template
+* Preserved kickstack's clean-canvas output after shadcn/ui setup by removing sample UI clutter and rewriting the starter files
+* Added support for combining **TypeScript + Tailwind** with **shadcn/ui** as a compatibility no-op path
+* Added automatic preparation for shadcn/ui prerequisites, including Tailwind setup and alias configuration
+* Improved TypeScript project compatibility by updating alias handling for both `tsconfig.json` and `tsconfig.app.json`
+* Verified the **TypeScript + Router + shadcn/ui + Firebase** flow end to end with typecheck and production build
 
 ### v1.1.6
 
