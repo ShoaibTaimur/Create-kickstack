@@ -5,7 +5,7 @@
 It helps you start coding **immediately**, instead of deleting files first.
 
 ## 🌐 Live Website
-👉 [kickstack.shoaaib.site](https://kickstack.js.org/)
+👉 [kickstack.js.org](https://kickstack.js.org/)
 
 
 ---
