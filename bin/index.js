@@ -313,7 +313,54 @@ export default App
 export default App
 `;
 
-const getCleanMainContents = ({ isTS, isRR, hasFirebase, useShadcn }) => {
+const getWrapperDefinitions = ({ hasTanstackQuery, useShadcn, hasFirebase }) => {
+  const wrappers = [];
+
+  if (hasTanstackQuery) {
+    wrappers.push({
+      importLines: [
+        "import {",
+        "  QueryClient,",
+        "  QueryClientProvider,",
+        "} from '@tanstack/react-query'",
+      ],
+      setupLines: [
+        "",
+        "const queryClient = new QueryClient()",
+      ],
+      openTag: "<QueryClientProvider client={queryClient}>",
+      closeTag: "</QueryClientProvider>",
+    });
+  }
+
+  if (useShadcn) {
+    wrappers.push({
+      importLines: ["import { ThemeProvider } from './components/theme-provider'"],
+      setupLines: [],
+      openTag: "<ThemeProvider>",
+      closeTag: "</ThemeProvider>",
+    });
+  }
+
+  if (hasFirebase) {
+    wrappers.push({
+      importLines: ["import AuthProvider from './Context/AuthProvider'"],
+      setupLines: [],
+      openTag: "<AuthProvider>",
+      closeTag: "</AuthProvider>",
+    });
+  }
+
+  return wrappers;
+};
+
+const getCleanMainContents = ({
+  isTS,
+  isRR,
+  hasFirebase,
+  useShadcn,
+  hasTanstackQuery,
+}) => {
   const lines = [
     "import { StrictMode } from 'react'",
     "import { createRoot } from 'react-dom/client'",
@@ -326,13 +373,15 @@ const getCleanMainContents = ({ isTS, isRR, hasFirebase, useShadcn }) => {
   lines.push("import './index.css'");
   lines.push("import App from './App'");
 
-  if (hasFirebase) {
-    lines.push("import AuthProvider from './Context/AuthProvider'");
-  }
+  const wrappers = getWrapperDefinitions({
+    hasTanstackQuery,
+    useShadcn,
+    hasFirebase,
+  });
 
-  if (useShadcn) {
-    lines.push("import { ThemeProvider } from './components/theme-provider'");
-  }
+  wrappers.forEach(({ importLines }) => {
+    lines.push(...importLines);
+  });
 
   const body = [];
 
@@ -343,28 +392,23 @@ const getCleanMainContents = ({ isTS, isRR, hasFirebase, useShadcn }) => {
     body.push("])");
   }
 
+  wrappers.forEach(({ setupLines }) => {
+    body.push(...setupLines);
+  });
+
   body.push("");
   body.push(`createRoot(document.getElementById('root')${isTS ? "!" : ""}).render(`);
   body.push("  <StrictMode>");
 
-  const wrappers = [];
-  if (useShadcn) {
-    wrappers.push("<ThemeProvider>");
-  }
-  if (hasFirebase) {
-    wrappers.push("<AuthProvider>");
-  }
-
-  wrappers.forEach((wrapper, index) => {
-    body.push(`${"  ".repeat(index + 2)}${wrapper}`);
+  wrappers.forEach(({ openTag }, index) => {
+    body.push(`${"  ".repeat(index + 2)}${openTag}`);
   });
 
   const renderLine = isRR ? "<RouterProvider router={router} />" : "<App />";
   body.push(`${"  ".repeat(wrappers.length + 2)}${renderLine}`);
 
-  [...wrappers].reverse().forEach((wrapper, index) => {
-    const tagName = wrapper.match(/<([A-Za-z0-9_]+)/)?.[1];
-    body.push(`${"  ".repeat(wrappers.length - index + 1)}</${tagName}>`);
+  [...wrappers].reverse().forEach(({ closeTag }, index) => {
+    body.push(`${"  ".repeat(wrappers.length - index + 1)}${closeTag}`);
   });
 
   body.push("  </StrictMode>");
@@ -536,13 +580,19 @@ const removeShadcnDemoArtifacts = async (projectDir) => {
 
 const applyCleanCanvasFiles = async (
   projectDir,
-  { isTS, isRR, hasFirebase, useShadcn, useAppCss }
+  { isTS, isRR, hasFirebase, useShadcn, useAppCss, hasTanstackQuery }
 ) => {
   const ext = isTS ? "tsx" : "jsx";
 
   await overwriteIfExists(
     path.join(projectDir, `src/main.${ext}`),
-    getCleanMainContents({ isTS, isRR, hasFirebase, useShadcn }),
+    getCleanMainContents({
+      isTS,
+      isRR,
+      hasFirebase,
+      useShadcn,
+      hasTanstackQuery,
+    }),
     projectDir
   );
 
@@ -597,7 +647,7 @@ const initializeShadcnWithRetry = async (projectDir) => {
   await runQuiet("npx", args);
 };
 
-const writeFirebaseAuthScaffold = async (projectDir, { isTS, isRR }) => {
+const writeFirebaseAuthScaffold = async (projectDir, { isTS }) => {
   const ext = isTS ? "tsx" : "jsx";
   const contextDir = path.join(projectDir, "src/Context");
 
@@ -652,45 +702,6 @@ function AuthProvider({ children }) {
 
 export default AuthProvider
 `
-  );
-
-  await overwriteIfExists(
-    path.join(projectDir, `src/main.${ext}`),
-    isRR
-      ? `import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { createBrowserRouter, RouterProvider } from 'react-router'
-import './index.css'
-import App from './App'
-import AuthProvider from './Context/AuthProvider'
-
-const router = createBrowserRouter([
-  { path: '/', element: <App /> },
-])
-
-createRoot(document.getElementById('root')${isTS ? "!" : ""}).render(
-  <StrictMode>
-    <AuthProvider>
-      <RouterProvider router={router} />
-    </AuthProvider>
-  </StrictMode>
-)
-`
-      : `import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App'
-import AuthProvider from './Context/AuthProvider'
-
-createRoot(document.getElementById('root')${isTS ? "!" : ""}).render(
-  <StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  </StrictMode>
-)
-`,
-    projectDir
   );
 };
 
@@ -1158,12 +1169,29 @@ const { useFirebase } = await inquirer.prompt([
   },
 ]);
 
+const { useTanstackQuery } = await inquirer.prompt([
+  {
+    type: "list",
+    name: "useTanstackQuery",
+    message: "Include TanStack Query?",
+    choices: [
+      {
+        name: "Yes — install @tanstack/react-query and scaffold QueryClientProvider",
+        value: true,
+      },
+      { name: "No", value: false },
+    ],
+    default: false,
+  },
+]);
+
 const isTS = variant.includes("TypeScript");
 const isTW = variant.includes("Tailwind");
 const isRR = useRouter === true;
 const isDaisy = uiLibrary === "daisyui";
 const isShadcn = uiLibrary === "shadcn";
 const hasFirebase = useFirebase === true;
+const hasTanstackQuery = useTanstackQuery === true;
 const ext = isTS ? "tsx" : "jsx";
 const template = isTS ? "react-ts" : "react";
 
@@ -1217,6 +1245,7 @@ await withSpinner("Cleaning Vite demo files", async () => {
     hasFirebase: false,
     useShadcn: false,
     useAppCss: true,
+    hasTanstackQuery: false,
   });
 
   await overwriteIfExists(
@@ -1288,6 +1317,16 @@ if (isRR) {
   });
 }
 
+if (hasTanstackQuery) {
+  await withSpinner("Setting up TanStack Query", async () => {
+    await installPackagesWithCompatibilityRetry(
+      projectDir,
+      ["@tanstack/react-query"],
+      { label: "TanStack Query setup" }
+    );
+  });
+}
+
 if ((isTW || isDaisy) && !isShadcn) {
   await withSpinner("Setting up Tailwind CSS", async () => {
     await installPackagesWithCompatibilityRetry(
@@ -1344,7 +1383,7 @@ if (hasFirebase) {
   });
 
   await withSpinner("Scaffolding Firebase auth context", async () => {
-    await writeFirebaseAuthScaffold(projectDir, { isTS, isRR });
+    await writeFirebaseAuthScaffold(projectDir, { isTS });
   });
 }
 
@@ -1355,6 +1394,7 @@ await withSpinner("Finalizing starter files", async () => {
     hasFirebase,
     useShadcn: isShadcn,
     useAppCss: !isShadcn,
+    hasTanstackQuery,
   });
 });
 

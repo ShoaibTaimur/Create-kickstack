@@ -34,6 +34,7 @@ When you run kickstack, it automatically:
 * Optionally configures shadcn/ui for TypeScript projects
 * Optionally adds React Router (data router)
 * Optionally installs Firebase and scaffolds auth context/provider files
+* Optionally installs TanStack Query and scaffolds `QueryClientProvider`
 * Prompts to start the generated app or server after setup
 * Produces a project that runs instantly
 
@@ -54,6 +55,7 @@ For **client-side** projects, kickstack includes:
 * Optional DaisyUI (Tailwind UI plugin)
 * Optional shadcn/ui setup for TypeScript projects
 * Optional Firebase auth scaffold
+* Optional TanStack Query setup
 * `.gitignore` and `README.md`
 * Ready-to-run development server
 
@@ -91,7 +93,7 @@ If you choose **client-side**, you’ll then be prompted to select one of the fo
 
 Each option generates the correct files, dependencies, and configuration automatically.
 
-You can also choose to include **React Router (data router)**, an optional **UI library (DaisyUI)**, and optional **Firebase auth scaffolding** during setup.
+You can also choose to include **React Router (data router)**, an optional **UI library (DaisyUI)**, optional **Firebase auth scaffolding**, and optional **TanStack Query** during setup.
 
 For TypeScript projects, the UI library prompt also supports **shadcn/ui**.
 If you choose the `React + TypeScript + Tailwind` variant with **shadcn/ui**, kickstack treats the Tailwind variant as a compatibility no-op because shadcn/ui already applies the Tailwind setup it needs.
@@ -209,6 +211,19 @@ This keeps the setup minimal while giving you the auth structure up front.
 
 ---
 
+### 🗂️ TanStack Query ready (optional)
+
+Choose TanStack Query during setup and kickstack will:
+
+* install `@tanstack/react-query`
+* create a `QueryClient`
+* wrap your app with `QueryClientProvider` in `main.jsx` / `main.tsx`
+* preserve router, Firebase, and shadcn/ui wrappers when combined
+
+This gives you a ready-to-use data fetching and caching setup from the start.
+
+---
+
 ### 🪶 Lightweight and focused
 
 kickstack does **one thing well**:
@@ -233,10 +248,18 @@ Uses a compatible Vite template instead of hard-coding files.
 | Manual shadcn setup   | shadcn/ui optional     |
 | Manual Router setup   | Router optional        |
 | Manual auth scaffold  | Firebase scaffold optional |
+| Manual Query setup    | TanStack Query optional |
 
 ---
 
 ## 📝 Version Notes
+
+### v1.3.1
+
+* Added an optional **TanStack Query** prompt for client-side projects
+* Installs the latest compatible `@tanstack/react-query` version during setup
+* Scaffolds `QueryClient` and `QueryClientProvider` in the generated `main.jsx` / `main.tsx`
+* Preserves TanStack Query setup when combined with **React Router**, **Firebase**, and **shadcn/ui**
 
 ### v1.3.0
 
@@ -304,6 +327,42 @@ npx kickstack@latest my-app
 ```
 
 Follow the prompts to choose whether you want a **client-side** or **server-side** starter, then select the available options for that path.
+
+---
+
+### Test locally from this repository
+
+To test the CLI locally before publishing, run it from the root of this repository:
+
+```bash
+cd "/media/shoaib/Personal/Code/Web development/NPM/create-kickstack"
+node bin/index.js test-query-app
+```
+
+If you want to test it as a linked global CLI:
+
+```bash
+cd "/media/shoaib/Personal/Code/Web development/NPM/create-kickstack"
+npm link
+kickstack test-query-app
+```
+
+When testing the new **TanStack Query** option, choose:
+
+1. `Client-side`
+2. Any React variant
+3. `Yes` for `Include TanStack Query?`
+
+Important:
+
+* Run `node bin/index.js ...` from the repository root, not from inside a generated project like `my-test-app`
+* The target folder name must not already exist
+
+To remove the linked global CLI later:
+
+```bash
+npm unlink -g kickstack
+```
 
 ---
 
